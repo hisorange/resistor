@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resistor Demo</title>
+
+    <script type="module">
+      import { Resistor } from '../build/browser/resistor.js';
+
+      const handler = async records => {
+        console.log('Handler called', records);
+
+        return new Promise(ok => {
+          const timeout = records.length * 10;
+
+          console.log('Handler delayed with', timeout, 'ms');
+
+          setTimeout(ok, timeout);
+        });
+      };
+
+      const r = new Resistor(handler);
+
+      console.log('Initialized', r);
+
+      function add(amount) {
+        for (let i = 0; i < amount; i++) {
+          r.push(`Item ${i}`);
+        }
+      }
+
+      window.add = add;
+    </script>
+  </head>
+  <body>
+    <button onclick="javascript:add(1);">Add 1</button>
+    <button onclick="javascript:add(2);">Add 2</button>
+    <button onclick="javascript:add(5);">Add 5</button>
+    <button onclick="javascript:add(10);">Add 10</button>
+    <button onclick="javascript:add(100);">Add 100</button>
+  </body>
+</html>
