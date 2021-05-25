@@ -22,14 +22,17 @@ export class RateLimiterStrategy implements IStrategy {
 
   async handleWaitPass(threadId: number, waitPass: WaitPass) {
     const now = Date.now();
-    const activity = this.threadActivity.get(threadId);
+    const activity = this.threadActivity.get(threadId) ?? [];
     const inInterval = activity.filter(
       activityAt => now - activityAt < this.config.interval,
     );
 
     if (inInterval.length >= this.config.occurrence) {
       await new Promise(wait =>
-        setTimeout(wait, this.config.interval - (now - inInterval.shift())),
+        setTimeout(
+          wait,
+          this.config.interval - (now - (inInterval.shift() ?? 0)),
+        ),
       );
     }
 
@@ -41,9 +44,9 @@ export class RateLimiterStrategy implements IStrategy {
 
   threadFinished(threadId: number, activityAt: number) {
     if (!this.threadActivity.has(threadId)) {
-      this.threadActivity.set(threadId, []);
+      this.threadActivity.set(threadId, [activityAt]);
+    } else {
+      this.threadActivity.get(threadId)?.push(activityAt);
     }
-
-    this.threadActivity.get(threadId).push(activityAt);
   }
 }

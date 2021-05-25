@@ -1,13 +1,13 @@
 {
-  "name": "@hisorange/capacitor",
+  "name": "@hisorange/resistor",
   "version": "1.0.0",
-  "description": "Buffer the workload before you flush it to the system!",
-  "main": "index.js",
-  "repository": "https://github.com/hisorange/capacitor",
+  "description": "Virtual threaded resource processing handler.",
+  "main": "build/index.js",
+  "repository": "https://github.com/hisorange/resistor",
   "author": "Zsolt Varga <hello@hisorange.me>",
   "license": "MIT",
   "scripts": {
-    "build-browser": "tsc --build ./tsconfig.browser.json"
+    "build": "tsc --build ./tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "^15.0.2",

@@ -31,11 +31,16 @@ export class Resistor<I> {
     recordReceived: 0,
   };
 
-  constructor(protected handler: Handler<I>, config: Partial<IResistorConfig>) {
+  constructor(
+    protected handler: Handler<I>,
+    config?: Partial<IResistorConfig>,
+  ) {
     // Merge the config overides to the base config.
     if (config) {
       this.config = merge(this.config, config);
     }
+
+    console.log(this.config);
 
     this.register();
   }

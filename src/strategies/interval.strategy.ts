@@ -20,7 +20,7 @@ export class IntervalStrategy implements IStrategy {
 
   async handleWaitPass(threadId: number, waitPass: WaitPass) {
     // Retrive the last finish epoch, so we can calculate the wait time until the next invokation.
-    const lastFinishedAt = this.monitor.get(threadId);
+    const lastFinishedAt = this.monitor.get(threadId) ?? 0;
 
     // Wait the minimum delay between execution
     const delay = Math.max(
