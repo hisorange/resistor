@@ -40,8 +40,6 @@ export class Resistor<I> {
       this.config = merge(this.config, config);
     }
 
-    console.log(this.config);
-
     this.register();
   }
 
