@@ -130,3 +130,27 @@ describe('Multi threaded flush handling', () => {
     expect(recordsHandled).toBe(3);
   });
 });
+
+describe('Flush error handler', () => {
+  it('Dispatch the error caused by the handler', done => {
+    const handler = async () => {
+      throw new Error('ByHandler');
+    };
+    const instance = new Resistor<string>(handler, {
+      buffer: {
+        size: 1,
+      },
+      autoFlush: {
+        enabled: false,
+      },
+    });
+
+    instance.push('e');
+
+    instance.on(EVENTS.FLUSH_ERROR, ({ error, count }) => {
+      expect(count).toBe(1);
+      expect(error.message).toBe('ByHandler');
+      done();
+    });
+  });
+});

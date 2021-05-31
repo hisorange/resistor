@@ -64,6 +64,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       invoked: 0,
       scheduled: 0,
       executed: 0,
+      errors: 0,
       processTime: 0,
     },
     thread: {
@@ -177,12 +178,16 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       // We cut the maximum record and leave an empty array behind,
       // this is needed in case an async .push has been called while an other call started the flush.
       const records = this.buffer.splice(0, this.config.buffer.size);
+      const job = () =>
+        this.handler(records).catch(error => {
+          this.emitter.emit(EVENTS.FLUSH_ERROR, {
+            error,
+            count: ++this._analytics.flush.errors,
+          });
+        });
 
       // Schedule the handler for execution, the strategy will handle the timings.
-      await this.schedule(
-        () => this.handler(records).catch(this.onError.bind(this)),
-        waitForHandler,
-      );
+      await this.schedule(job, waitForHandler);
     }
 
     // Always push the auto flush even if the next flush will do the same.
@@ -194,7 +199,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    * and the scheduler is responsible to manage the queue and the threads.
    */
   protected async schedule(
-    execution: () => Promise<void>,
+    job: () => Promise<void>,
     waitForHandler: boolean,
   ): Promise<void> {
     // Limit the maximum "virtual threads" to the configured threshold.
@@ -214,7 +219,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     const startedAt = Date.now();
 
     // Push the execution to a free thread.
-    const threadId = this.virtualThreads.push(execution()) - 1;
+    const threadId = this.virtualThreads.push(job()) - 1;
 
     // Hook to handle thread removal.
     const handler = this.virtualThreads[threadId].then(() => {
@@ -260,10 +265,6 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     if (waitForHandler) {
       await handler;
     }
-  }
-
-  onError(error: Error) {
-    console.error(error);
   }
 
   /**
