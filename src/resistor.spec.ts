@@ -143,7 +143,7 @@ describe('Flush error handler', () => {
 
     instance.push('e');
 
-    instance.on(EVENTS.FLUSH_ERROR, ({ error, errors }) => {
+    instance.on(EVENTS.FLUSH_REJECTED, ({ error, errors }) => {
       expect(errors).toBe(1);
       expect(error.message).toBe('ByHandler');
       instance.deregister();
@@ -169,7 +169,7 @@ describe('Retrier', () => {
 
     instance.push('e');
 
-    instance.on(EVENTS.FLUSH_RETRIED, ({ retries }) => {
+    instance.on(EVENTS.FLUSH_RETRYING, ({ retries }) => {
       if (retries === 2) {
         instance.deregister();
         done();

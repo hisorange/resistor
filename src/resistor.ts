@@ -182,7 +182,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       let retries = 0;
       const job = () =>
         this.handler(records).catch(error => {
-          this.emitter.emit(EVENTS.FLUSH_ERROR, {
+          this.emitter.emit(EVENTS.FLUSH_REJECTED, {
             error,
             records,
             retries,
@@ -193,7 +193,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
           if (this.config.retrier) {
             // We are below the maximum tries.
             if (++retries <= this.config.retrier.times) {
-              this.emitter.emit(EVENTS.FLUSH_RETRIED, {
+              this.emitter.emit(EVENTS.FLUSH_RETRYING, {
                 error,
                 records,
                 retries,
