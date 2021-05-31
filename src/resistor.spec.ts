@@ -59,9 +59,7 @@ describe('Single threaded flush handling', () => {
       buffer: {
         size: 2,
       },
-      autoFlush: {
-        enabled: false,
-      },
+      autoFlush: false,
     });
 
     for (let n = 0; n < 6; n++) {
@@ -86,9 +84,7 @@ describe('Multi threaded flush handling', () => {
         buffer: {
           size: 3,
         },
-        autoFlush: {
-          enabled: false,
-        },
+        autoFlush: false,
       },
     );
 
@@ -140,9 +136,7 @@ describe('Flush error handler', () => {
       buffer: {
         size: 1,
       },
-      autoFlush: {
-        enabled: false,
-      },
+      autoFlush: false,
     });
 
     instance.push('e');

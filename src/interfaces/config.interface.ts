@@ -6,18 +6,14 @@ export interface IResistorConfig {
    */
   threads: number;
 
-  autoFlush: {
-    /**
-     * Use this switch to disable the auto flush feature, you can call flush before your script shutsdown to
-     * provide a similiar functionality.
-     */
-    enabled: boolean;
-
-    /**
-     * Interval delayed between auto flush calls.
-     */
-    delay: number;
-  };
+  autoFlush:
+    | {
+        /**
+         * Interval delayed between auto flush calls.
+         */
+        delay: number;
+      }
+    | false;
 
   buffer: {
     /**

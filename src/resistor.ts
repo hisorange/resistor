@@ -46,7 +46,6 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     },
 
     autoFlush: {
-      enabled: true,
       delay: 1000,
     },
 
@@ -118,7 +117,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    * This is always being pushed out when the buffer reaches the maximum size.
    */
   protected register() {
-    if (this.config.autoFlush.enabled) {
+    if (this.config.autoFlush) {
       this.autoFlushTimer = setTimeout(
         () => this.flush(),
         this.config.autoFlush.delay,
@@ -134,7 +133,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    */
   async deregister() {
     // Inactivate the timer registration.
-    this.config.autoFlush.enabled = false;
+    this.config.autoFlush = false;
 
     // Flush the last buffer.
     if (this.buffer.length > 0) {
