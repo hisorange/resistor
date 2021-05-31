@@ -1,10 +1,18 @@
+import EventEmitter from 'events';
 import merge from 'ts-deepmerge';
+import { EVENTS } from './events';
 import { IResistorConfig } from './interfaces/config.interface';
 import { Handler } from './interfaces/handler.interface';
 import { WaitPass } from './interfaces/wait-pass.interface';
 import { UnboundStrategy } from './strategies/unbound.strategy';
 
-export class Resistor<I> {
+type DeepPartial<T> = {
+  [propertyKey in keyof T]?: DeepPartial<T[propertyKey]>;
+};
+
+type EventListener = (...args: any[]) => void;
+
+export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
   /**
    * Temporary buffer to store the records until the handler flushes them.
    */
@@ -51,24 +59,34 @@ export class Resistor<I> {
   /**
    * Usage analytics, designed to be used with healthchecks.
    */
-  protected analytics = {
+  protected _analytics = {
     flush: {
       invoked: 0,
       scheduled: 0,
+      executed: 0,
       processTime: 0,
     },
     thread: {
       active: 0,
-      inQueue: 0,
+      opened: 0,
+      closed: 0,
+    },
+    queue: {
+      waiting: 0,
     },
     record: {
       received: 0,
     },
   };
 
+  /**
+   * NodeJS event emitter.
+   */
+  protected emitter: EventEmitter;
+
   constructor(
     protected handler: Handler<I>,
-    config?: Partial<IResistorConfig>,
+    config?: DeepPartial<IResistorConfig>,
   ) {
     // Merge the config overides to the base config.
     if (config) {
@@ -76,6 +94,20 @@ export class Resistor<I> {
     }
 
     this.register();
+
+    this.emitter = new EventEmitter();
+  }
+
+  on(event: EVENTS, listener: EventListener) {
+    return this.emitter.on(event, listener);
+  }
+
+  once(event: EVENTS, listener: EventListener) {
+    return this.emitter.once(event, listener);
+  }
+
+  off(event: EVENTS, listener: EventListener) {
+    return this.emitter.off(event, listener);
   }
 
   /**
@@ -100,6 +132,10 @@ export class Resistor<I> {
    * @example process.on('SIGKILL', resistor.deregister.bind(resistor));
    */
   async deregister() {
+    // Inactivate the timer registration.
+    this.config.autoFlush.enabled = false;
+
+    // Flush the last buffer.
     if (this.buffer.length > 0) {
       await this.flush({
         waitForHandler: true,
@@ -109,6 +145,9 @@ export class Resistor<I> {
     if (this.autoFlushTimer) {
       clearTimeout(this.autoFlushTimer);
     }
+
+    // Remove hanging listeners.
+    this.emitter.removeAllListeners();
   }
 
   /**
@@ -122,7 +161,7 @@ export class Resistor<I> {
   async flush(
     { waitForHandler }: { waitForHandler: boolean } = { waitForHandler: false },
   ) {
-    this.analytics.flush.invoked++;
+    this.emitter.emit(EVENTS.FLUSH_INVOKED, ++this._analytics.flush.invoked);
 
     // Release the auto flush until the buffer is freed.
     if (this.autoFlushTimer) {
@@ -130,7 +169,10 @@ export class Resistor<I> {
     }
 
     if (this.buffer.length > 0) {
-      this.analytics.flush.scheduled++;
+      this.emitter.emit(
+        EVENTS.FLUSH_SCHEDULED,
+        ++this._analytics.flush.scheduled,
+      );
 
       // We cut the maximum record and leave an empty array behind,
       // this is needed in case an async .push has been called while an other call started the flush.
@@ -157,16 +199,17 @@ export class Resistor<I> {
   ): Promise<void> {
     // Limit the maximum "virtual threads" to the configured threshold.
     if (this.virtualThreads.length >= this.config.threads) {
-      this.analytics.thread.inQueue++;
+      this._analytics.queue.waiting++;
 
       // Wait until a thread finishes and allows the execution of this flush.
       await new Promise(waitPass => this.waitQueue.push(waitPass));
 
-      this.analytics.thread.inQueue--;
+      this._analytics.queue.waiting--;
     }
 
     // Count thread as active.
-    this.analytics.thread.active++;
+    this._analytics.thread.active++;
+    this.emitter.emit(EVENTS.THREAD_OPENED, ++this._analytics.thread.opened);
 
     const startedAt = Date.now();
 
@@ -178,13 +221,18 @@ export class Resistor<I> {
       const finishedAt = Date.now();
 
       // Track the execution time.
-      this.analytics.flush.processTime = finishedAt - startedAt;
+      this._analytics.flush.processTime = finishedAt - startedAt;
+      this.emitter.emit(
+        EVENTS.FLUSH_EXECUTED,
+        ++this._analytics.flush.executed,
+      );
 
       // Remove the process after finish.
       this.virtualThreads.splice(threadId, 1);
 
       // Mark thread as inactive.
-      this.analytics.thread.active--;
+      this._analytics.thread.active--;
+      this.emitter.emit(EVENTS.THREAD_CLOSED, ++this._analytics.thread.closed);
 
       // When we apply the limiter globaly we use the 0 thread for faking a single thread.
       const vThreadId = this.config.limiter.level === 'global' ? 0 : threadId;
@@ -200,6 +248,11 @@ export class Resistor<I> {
         if (typeof waitPass === 'function') {
           this.config.limiter.strategy.handleWaitPass(vThreadId, waitPass);
         }
+
+        // Indicate that the queue has been used and now it's empty again.
+        if (this.waitQueue.length === 0) {
+          this.emitter.emit(EVENTS.QUEUE_EMPTY);
+        }
       }
     });
 
@@ -213,12 +266,20 @@ export class Resistor<I> {
     console.error(error);
   }
 
+  /**
+   * Push a record to the buffer, returns a promise which should be awaited so
+   * the caller can be slowed down when the threads are overloaded.
+   */
   async push(record: I): Promise<void> {
-    this.analytics.record.received++;
+    this._analytics.record.received++;
     this.buffer.push(record);
 
     if (this.buffer.length >= this.config.buffer.size) {
       await this.flush();
     }
+  }
+
+  get analytics() {
+    return this._analytics;
   }
 }

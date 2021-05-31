@@ -7,10 +7,14 @@
   "author": "Zsolt Varga <hello@hisorange.me>",
   "license": "MIT",
   "scripts": {
-    "build": "tsc --build ./tsconfig.json"
+    "build": "tsc --build ./tsconfig.json",
+    "test": "jest"
   },
   "devDependencies": {
+    "@types/jest": "^26.0.23",
     "@types/node": "^15.0.2",
+    "jest": "^27.0.3",
+    "ts-jest": "^27.0.2",
     "typescript": "^4.2.4"
   },
   "dependencies": {
