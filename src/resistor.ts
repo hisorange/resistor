@@ -110,31 +110,31 @@ export class Resistor<I> {
     const threadId = this.virtualThreads.push(execution()) - 1;
 
     // Wait until it finishes, the error is handled by the process.
-    await this.virtualThreads[threadId];
+    this.virtualThreads[threadId].then(() => {
+      const finishedAt = Date.now();
 
-    const finishedAt = Date.now();
+      // Track the execution time.
+      this.analytics.executionTotalTime = finishedAt - startedAt;
 
-    // Track the execution time.
-    this.analytics.executionTotalTime = finishedAt - startedAt;
+      // Remove the process after finish.
+      this.virtualThreads.splice(threadId, 1);
 
-    // Remove the process after finish.
-    this.virtualThreads.splice(threadId, 1);
+      // When we apply the limiter globaly we use the 0 thread for faking a single thread.
+      const vThreadId = this.config.limiter.level === 'global' ? 0 : threadId;
 
-    // When we apply the limiter globaly we use the 0 thread for faking a single thread.
-    const vThreadId = this.config.limiter.level === 'global' ? 0 : threadId;
+      // Let the strategy know, the thread just handled an execution.
+      this.config.limiter.strategy.threadFinished(vThreadId, finishedAt);
 
-    // Let the strategy know, the thread just handled an execution.
-    this.config.limiter.strategy.threadFinished(vThreadId, finishedAt);
+      // Check for waiting processes.
+      if (this.waitQueue.length > 0) {
+        // Get the first waiting pass from the queue.
+        const waitPass = this.waitQueue.shift();
 
-    // Check for waiting processes.
-    if (this.waitQueue.length > 0) {
-      // Get the first waiting pass from the queue.
-      const waitPass = this.waitQueue.shift();
-
-      if (typeof waitPass === 'function') {
-        this.config.limiter.strategy.handleWaitPass(vThreadId, waitPass);
+        if (typeof waitPass === 'function') {
+          this.config.limiter.strategy.handleWaitPass(vThreadId, waitPass);
+        }
       }
-    }
+    });
   }
 
   onError(error: Error) {
