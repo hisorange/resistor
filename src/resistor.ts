@@ -5,17 +5,40 @@ import { WaitPass } from './interfaces/wait-pass.interface';
 import { UnboundStrategy } from './strategies/unbound.strategy';
 
 export class Resistor<I> {
-  protected recordBuffer: I[] = [];
+  /**
+   * Temporary buffer to store the records until the handler flushes them.
+   */
+  protected buffer: I[] = [];
+
+  /**
+   * Continouosly delayed timer to ensure the flush is called reguraly even if
+   * the buffer would not reach it's maximum size.
+   */
   protected autoFlushTimer: NodeJS.Timer | undefined;
+
+  /**
+   * Stores the active flush handlers, this is how the script tracks the active "threads".
+   */
   protected virtualThreads: Promise<void>[] = [];
+
+  /**
+   * When the maximum thread reached, the script will enqueue the flush handlers in a FIFO logic,
+   * after a thread finished, it will shift the first waiting execution and allows its execution.
+   */
   protected waitQueue: WaitPass[] = [];
 
+  /**
+   * Stores the manageging configurations.
+   */
   protected config: IResistorConfig = {
     threads: 10,
+
     buffer: {
       size: 100,
     },
+
     autoFlush: {
+      enabled: true,
       delay: 1000,
     },
 
@@ -25,10 +48,22 @@ export class Resistor<I> {
     },
   };
 
+  /**
+   * Usage analytics, designed to be used with healthchecks.
+   */
   protected analytics = {
-    flushCount: 0,
-    executionTotalTime: 0,
-    recordReceived: 0,
+    flush: {
+      invoked: 0,
+      scheduled: 0,
+      processTime: 0,
+    },
+    thread: {
+      active: 0,
+      inQueue: 0,
+    },
+    record: {
+      received: 0,
+    },
   };
 
   constructor(
@@ -50,20 +85,25 @@ export class Resistor<I> {
    * This is always being pushed out when the buffer reaches the maximum size.
    */
   protected register() {
-    this.autoFlushTimer = setTimeout(
-      this.flush.bind(this),
-      this.config.autoFlush.delay,
-    );
+    if (this.config.autoFlush.enabled) {
+      this.autoFlushTimer = setTimeout(
+        () => this.flush(),
+        this.config.autoFlush.delay,
+      );
+    }
   }
 
   /**
    * Call this before shutdown to empty the last buffer and remove the timer.
    *
    * @example process.on('SIGTERM', resistor.deregister.bind(resistor));
+   * @example process.on('SIGKILL', resistor.deregister.bind(resistor));
    */
   async deregister() {
-    if (this.recordBuffer.length > 0) {
-      await this.flush();
+    if (this.buffer.length > 0) {
+      await this.flush({
+        waitForHandler: true,
+      });
     }
 
     if (this.autoFlushTimer) {
@@ -72,25 +112,34 @@ export class Resistor<I> {
   }
 
   /**
-   * Initiate a flush, this will schedule the current buffer to a virtual thread
-   * and waits until executed.
+   * Initiate a flush, this will schedule the current buffer to a virtual thread.
+   *
+   * Important! By default the flush will not wait for the handler to execute so the caller
+   * can push the records until the active threads are populated without waiting.
+   *
+   * But when the deregister called the script will wait for the last flush to be handled.
    */
-  async flush() {
-    this.analytics.flushCount++;
+  async flush(
+    { waitForHandler }: { waitForHandler: boolean } = { waitForHandler: false },
+  ) {
+    this.analytics.flush.invoked++;
 
     // Release the auto flush until the buffer is freed.
     if (this.autoFlushTimer) {
       clearTimeout(this.autoFlushTimer);
     }
 
-    if (this.recordBuffer.length > 0) {
+    if (this.buffer.length > 0) {
+      this.analytics.flush.scheduled++;
+
       // We cut the maximum record and leave an empty array behind,
       // this is needed in case an async .push has been called while an other call started the flush.
-      const records = this.recordBuffer.splice(0, this.config.buffer.size);
+      const records = this.buffer.splice(0, this.config.buffer.size);
 
       // Schedule the handler for execution, the strategy will handle the timings.
-      await this.schedule(() =>
-        this.handler(records).catch(this.onError.bind(this)),
+      await this.schedule(
+        () => this.handler(records).catch(this.onError.bind(this)),
+        waitForHandler,
       );
     }
 
@@ -98,26 +147,44 @@ export class Resistor<I> {
     this.register();
   }
 
-  protected async schedule(execution: () => Promise<void>) {
+  /**
+   * Handles the actual thread scheduling, the flush simply just packages an execution
+   * and the scheduler is responsible to manage the queue and the threads.
+   */
+  protected async schedule(
+    execution: () => Promise<void>,
+    waitForHandler: boolean,
+  ): Promise<void> {
     // Limit the maximum "virtual threads" to the configured threshold.
     if (this.virtualThreads.length >= this.config.threads) {
+      this.analytics.thread.inQueue++;
+
+      // Wait until a thread finishes and allows the execution of this flush.
       await new Promise(waitPass => this.waitQueue.push(waitPass));
+
+      this.analytics.thread.inQueue--;
     }
+
+    // Count thread as active.
+    this.analytics.thread.active++;
 
     const startedAt = Date.now();
 
     // Push the execution to a free thread.
     const threadId = this.virtualThreads.push(execution()) - 1;
 
-    // Wait until it finishes, the error is handled by the process.
-    this.virtualThreads[threadId].then(() => {
+    // Hook to handle thread removal.
+    const handler = this.virtualThreads[threadId].then(() => {
       const finishedAt = Date.now();
 
       // Track the execution time.
-      this.analytics.executionTotalTime = finishedAt - startedAt;
+      this.analytics.flush.processTime = finishedAt - startedAt;
 
       // Remove the process after finish.
       this.virtualThreads.splice(threadId, 1);
+
+      // Mark thread as inactive.
+      this.analytics.thread.active--;
 
       // When we apply the limiter globaly we use the 0 thread for faking a single thread.
       const vThreadId = this.config.limiter.level === 'global' ? 0 : threadId;
@@ -135,6 +202,11 @@ export class Resistor<I> {
         }
       }
     });
+
+    // The flush wants to wait for the handler as well.
+    if (waitForHandler) {
+      await handler;
+    }
   }
 
   onError(error: Error) {
@@ -142,10 +214,10 @@ export class Resistor<I> {
   }
 
   async push(record: I): Promise<void> {
-    this.analytics.recordReceived++;
-    this.recordBuffer.push(record);
+    this.analytics.record.received++;
+    this.buffer.push(record);
 
-    if (this.recordBuffer.length >= this.config.buffer.size) {
+    if (this.buffer.length >= this.config.buffer.size) {
       await this.flush();
     }
   }
