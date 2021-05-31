@@ -53,6 +53,8 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       level: 'global',
       strategy: new UnboundStrategy(),
     },
+
+    retrier: false,
   };
 
   /**
@@ -177,12 +179,29 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       // We cut the maximum record and leave an empty array behind,
       // this is needed in case an async .push has been called while an other call started the flush.
       const records = this.buffer.splice(0, this.config.buffer.size);
+      let retries = 0;
       const job = () =>
         this.handler(records).catch(error => {
           this.emitter.emit(EVENTS.FLUSH_ERROR, {
             error,
-            count: ++this._analytics.flush.errors,
+            records,
+            retries,
+            errors: ++this._analytics.flush.errors,
           });
+
+          // Retrying is enabled
+          if (this.config.retrier) {
+            // We are below the maximum tries.
+            if (++retries <= this.config.retrier.times) {
+              this.emitter.emit(EVENTS.FLUSH_RETRIED, {
+                error,
+                records,
+                retries,
+              });
+
+              return this.schedule(job, waitForHandler);
+            }
+          }
         });
 
       // Schedule the handler for execution, the strategy will handle the timings.

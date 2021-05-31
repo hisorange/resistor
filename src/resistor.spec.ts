@@ -7,7 +7,6 @@ describe('Auto flush', () => {
       expect(records).toEqual(expect.arrayContaining([1, 2, 3]));
 
       instance.deregister();
-
       done();
     };
 
@@ -67,6 +66,7 @@ describe('Single threaded flush handling', () => {
     }
 
     expect(handler).toHaveBeenCalledTimes(3);
+    instance.deregister();
   });
 });
 
@@ -124,6 +124,8 @@ describe('Multi threaded flush handling', () => {
 
     expect(instance.analytics.record.received).toBe(9);
     expect(recordsHandled).toBe(3);
+
+    instance.deregister();
   });
 });
 
@@ -141,10 +143,37 @@ describe('Flush error handler', () => {
 
     instance.push('e');
 
-    instance.on(EVENTS.FLUSH_ERROR, ({ error, count }) => {
-      expect(count).toBe(1);
+    instance.on(EVENTS.FLUSH_ERROR, ({ error, errors }) => {
+      expect(errors).toBe(1);
       expect(error.message).toBe('ByHandler');
+      instance.deregister();
       done();
+    });
+  });
+});
+
+describe('Retrier', () => {
+  it('Should retry twice on error', done => {
+    const handler = async () => {
+      throw new Error('ByHandler');
+    };
+    const instance = new Resistor<string>(handler, {
+      buffer: {
+        size: 1,
+      },
+      autoFlush: false,
+      retrier: {
+        times: 2,
+      },
+    });
+
+    instance.push('e');
+
+    instance.on(EVENTS.FLUSH_RETRIED, ({ retries }) => {
+      if (retries === 2) {
+        instance.deregister();
+        done();
+      }
     });
   });
 });

@@ -6,6 +6,9 @@ export interface IResistorConfig {
    */
   threads: number;
 
+  /**
+   * Empties the buffer even if the maximum is not reached.
+   */
   autoFlush:
     | {
         /**
@@ -34,4 +37,13 @@ export interface IResistorConfig {
      */
     strategy: IStrategy;
   };
+
+  /**
+   * Retries the handler if the handler throws an unhandled promise rejection.
+   */
+  retrier:
+    | {
+        times: number;
+      }
+    | false;
 }
