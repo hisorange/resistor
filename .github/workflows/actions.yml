@@ -1,24 +1,21 @@
-name: NPM Publish
+name: 'NPM Publish'
 on:
   push:
     branches:
       - main
 jobs:
   publish:
-    name: publish
+    name: Publishing
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [13.x]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Build on node v${{ matrix.node-version }}
+      - name: Build on node v14
         uses: actions/setup-node@v1
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 14.x
       - run: yarn install
       - run: yarn build
       - run: yarn test
