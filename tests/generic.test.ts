@@ -1,5 +1,5 @@
-import { EVENTS } from './events';
-import { Resistor } from './resistor';
+import { EVENTS } from '../src/events';
+import { Resistor } from '../src/resistor';
 
 describe('Auto flush', () => {
   it('Flush on timer without reaching the max size', done => {
@@ -143,9 +143,9 @@ describe('Flush error handler', () => {
 
     instance.push('e');
 
-    instance.on(EVENTS.FLUSH_REJECTED, ({ error, errors }) => {
+    instance.on(EVENTS.FLUSH_REJECTED, ({ rejection, errors }) => {
       expect(errors).toBe(1);
-      expect(error.message).toBe('ByHandler');
+      expect(rejection.message).toBe('ByHandler');
       instance.deregister();
       done();
     });

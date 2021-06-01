@@ -1,10 +1,12 @@
 import EventEmitter from 'events';
 import merge from 'ts-deepmerge';
 import { EVENTS } from './events';
+import { IAnalytics } from './interfaces/analytics.interface';
 import { IResistorConfig } from './interfaces/config.interface';
 import { DeepPartial } from './interfaces/deep-partial.type';
 import { EventListener } from './interfaces/event-listener.type';
-import { Handler } from './interfaces/handler.interface';
+import { IFlushConfig } from './interfaces/flush-config.interface';
+import { IHandler } from './interfaces/handler.interface';
 import { WaitPass } from './interfaces/wait-pass.interface';
 import { UnboundStrategy } from './strategies/unbound.strategy';
 
@@ -56,7 +58,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
   /**
    * Usage analytics, designed to be used with healthchecks.
    */
-  protected _analytics = {
+  protected _analytics: IAnalytics = {
     flush: {
       invoked: 0,
       scheduled: 0,
@@ -82,8 +84,11 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    */
   protected emitter: EventEmitter;
 
+  /**
+   * Initialize a configured resistor.
+   */
   constructor(
-    protected handler: Handler<I>,
+    protected handler: IHandler<I>,
     config?: DeepPartial<IResistorConfig>,
   ) {
     // Merge the config overides to the base config.
@@ -91,20 +96,31 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       this.config = merge(this.config, config);
     }
 
+    // Start the auto flush timer if it's configured.
     this.register();
 
+    // Create an event emitter.
     this.emitter = new EventEmitter();
   }
 
-  on(event: EVENTS, listener: EventListener) {
+  /**
+   * Register an event listener for every occasion when the event emitted.
+   */
+  on(event: EVENTS, listener: EventListener): EventEmitter {
     return this.emitter.on(event, listener);
   }
 
-  once(event: EVENTS, listener: EventListener) {
+  /**
+   * Register an event listener for one event emitting.
+   */
+  once(event: EVENTS, listener: EventListener): EventEmitter {
     return this.emitter.once(event, listener);
   }
 
-  off(event: EVENTS, listener: EventListener) {
+  /**
+   * Deregister the given event listener.
+   */
+  off(event: EVENTS, listener: EventListener): EventEmitter {
     return this.emitter.off(event, listener);
   }
 
@@ -156,9 +172,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    *
    * But when the deregister called the script will wait for the last flush to be handled.
    */
-  async flush(
-    { waitForHandler }: { waitForHandler: boolean } = { waitForHandler: false },
-  ) {
+  async flush(config: IFlushConfig = { waitForHandler: false }) {
     this.emitter.emit(EVENTS.FLUSH_INVOKED, ++this._analytics.flush.invoked);
 
     // Release the auto flush until the buffer is freed.
@@ -177,11 +191,10 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       const records = this.buffer.splice(0, this.config.buffer.size);
       let retries = 0;
       const job = () =>
-        this.handler(records).catch(error => {
+        this.handler(records).catch(async rejection => {
           this.emitter.emit(EVENTS.FLUSH_REJECTED, {
-            error,
+            rejection,
             records,
-            retries,
             errors: ++this._analytics.flush.errors,
           });
 
@@ -190,18 +203,18 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
             // We are below the maximum tries.
             if (++retries <= this.config.retrier.times) {
               this.emitter.emit(EVENTS.FLUSH_RETRYING, {
-                error,
+                rejection,
                 records,
                 retries,
               });
 
-              return this.schedule(job, waitForHandler);
+              await job();
             }
           }
         });
 
       // Schedule the handler for execution, the strategy will handle the timings.
-      await this.schedule(job, waitForHandler);
+      await this.schedule(job, config.waitForHandler);
     }
 
     // Always push the auto flush even if the next flush will do the same.
@@ -294,7 +307,10 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     }
   }
 
-  get analytics() {
+  /**
+   * Reads the current analytics.
+   */
+  get analytics(): IAnalytics {
     return this._analytics;
   }
 }
