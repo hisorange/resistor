@@ -2,15 +2,11 @@ import EventEmitter from 'events';
 import merge from 'ts-deepmerge';
 import { EVENTS } from './events';
 import { IResistorConfig } from './interfaces/config.interface';
+import { DeepPartial } from './interfaces/deep-partial.type';
+import { EventListener } from './interfaces/event-listener.type';
 import { Handler } from './interfaces/handler.interface';
 import { WaitPass } from './interfaces/wait-pass.interface';
 import { UnboundStrategy } from './strategies/unbound.strategy';
-
-type DeepPartial<T> = {
-  [propertyKey in keyof T]?: DeepPartial<T[propertyKey]>;
-};
-
-type EventListener = (...args: any[]) => void;
 
 export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
   /**
