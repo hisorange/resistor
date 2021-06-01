@@ -20,12 +20,12 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    * Continouosly delayed timer to ensure the flush is called reguraly even if
    * the buffer would not reach it's maximum size.
    */
-  protected autoFlushTimer: NodeJS.Timer | undefined;
+  protected flushTimer: NodeJS.Timer | undefined;
 
   /**
    * Stores the active flush handlers, this is how the script tracks the active "threads".
    */
-  protected virtualThreads: Promise<void>[] = [];
+  protected vThreads: Promise<void>[] = [];
 
   /**
    * When the maximum thread reached, the script will enqueue the flush handlers in a FIFO logic,
@@ -135,7 +135,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    */
   protected register() {
     if (this.config.autoFlush) {
-      this.autoFlushTimer = setTimeout(
+      this.flushTimer = setTimeout(
         () => this.flush(),
         this.config.autoFlush.delay,
       );
@@ -144,6 +144,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
 
   /**
    * Call this before shutdown to empty the last buffer and remove the timer.
+   * Also useful to await this because only resolves when the buffer, queue, and threads are empty.
    *
    * @example process.on('SIGTERM', resistor.deregister.bind(resistor));
    * @example process.on('SIGKILL', resistor.deregister.bind(resistor));
@@ -161,16 +162,17 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
 
     // Wait until the jobs are finished
     while (this.waitQueue.length) {
-      await Promise.all(this.virtualThreads);
+      await Promise.all(this.vThreads);
     }
 
-    if (this.virtualThreads.length) {
-      await Promise.all(this.virtualThreads);
+    // Queue maybe empty but the vThreads could be loaded.
+    if (this.vThreads.length) {
+      await Promise.all(this.vThreads);
     }
 
     // Remove the last auto timer.
-    if (this.autoFlushTimer) {
-      clearTimeout(this.autoFlushTimer);
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
     }
 
     // Remove hanging listeners.
@@ -189,8 +191,8 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     this.emitter.emit(EVENTS.FLUSH_INVOKED, ++this._analytics.flush.invoked);
 
     // Release the auto flush until the buffer is freed.
-    if (this.autoFlushTimer) {
-      clearTimeout(this.autoFlushTimer);
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
     }
 
     if (this.buffer.length > 0) {
@@ -247,11 +249,10 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     waitForHandler: boolean,
   ): Promise<void> {
     // Limit the maximum "virtual threads" to the configured threshold.
-    if (this.virtualThreads.length >= this.config.threads) {
-      this._analytics.queue.waiting++;
+    if (this.vThreads.length >= this.config.threads) {
       this._analytics.queue.maximum = Math.max(
         this._analytics.queue.maximum,
-        this._analytics.queue.waiting,
+        ++this._analytics.queue.waiting,
       );
 
       // Wait until a thread finishes and allows the execution of this flush.
@@ -260,23 +261,21 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       this._analytics.queue.waiting--;
     }
 
-    // Count thread as active.
-    this._analytics.thread.active++;
+    // Track maximum thread count.
+    this._analytics.thread.maximum = Math.max(
+      ++this._analytics.thread.active,
+      this._analytics.thread.maximum,
+    );
+
     this.emitter.emit(EVENTS.THREAD_OPENED, ++this._analytics.thread.opened);
 
     const startedAt = Date.now();
 
     // Push the execution to a free thread.
-    const threadId = this.virtualThreads.push(job()) - 1;
-
-    // Track maximum thread count.
-    this._analytics.thread.maximum = Math.max(
-      this._analytics.thread.active,
-      this._analytics.thread.maximum,
-    );
+    const threadId = this.vThreads.push(job()) - 1;
 
     // Hook to handle thread removal.
-    const handler = this.virtualThreads[threadId].then(() => {
+    const handler = this.vThreads[threadId].then(() => {
       const finishedAt = Date.now();
 
       // Track the execution time.
@@ -287,7 +286,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       );
 
       // Remove the process after finish.
-      this.virtualThreads.splice(threadId, 1);
+      this.vThreads.splice(threadId, 1);
 
       // Mark thread as inactive.
       this._analytics.thread.active--;

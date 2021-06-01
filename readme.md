@@ -16,7 +16,7 @@ const buffer = new Resistor<string>(
   {
     threads: 10,
     buffer: {
-      size: 1000,
+      size: 1_000,
     },
     limiter: {
       level: 'thread',
