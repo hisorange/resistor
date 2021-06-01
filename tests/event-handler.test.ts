@@ -1,5 +1,8 @@
 import { EVENTS, IHandler, Resistor } from '../src';
 
+jest.setTimeout(100);
+jest.mock('events');
+
 const createTestInstance = (handler?: IHandler<any>) => {
   return new Resistor(handler ?? (async () => {}), {
     threads: 1,
@@ -9,8 +12,6 @@ const createTestInstance = (handler?: IHandler<any>) => {
     autoFlush: false,
   });
 };
-
-jest.mock('events');
 
 describe('Event handler', () => {
   beforeEach(() => {
@@ -139,8 +140,8 @@ describe('Event emitting', () => {
     instance.deregister();
   });
 
-  it.each([1, 2, 3, 10])(
-    `should dispatch [${EVENTS.FLUSH_REJECTED}] event with thread count [%]`,
+  test.concurrent.each([1, 2, 3, 10])(
+    `should dispatch [${EVENTS.FLUSH_REJECTED}] event with thread count [%i]`,
     async (threadCount: number) => {
       const rejection = new Error('Jest');
       const instance = new Resistor(() => Promise.reject(rejection), {
@@ -164,8 +165,8 @@ describe('Event emitting', () => {
     },
   );
 
-  it.each([1, 2, 3, 10])(
-    `should dispatch [${EVENTS.FLUSH_RETRYING}] event with thread count [%]`,
+  test.concurrent.each([1, 2, 3, 10])(
+    `should dispatch [${EVENTS.FLUSH_RETRYING}] event with thread count [%i]`,
     async (threadCount: number) => {
       const rejection = new Error('Jest');
       const createReturnValue = (retries: number) => ({
