@@ -61,15 +61,25 @@ To provide hooks the package comes with an **EventEmitter** implementation, and 
 
 ### Retry Handler
 
+---
+
 When the handler throws an unhandled rejection, the resistor can schedule it for one more execution. By default this is turned off, because You can subscribe to the flush.rejected event and could handle the error by yourself, but if your workload allows a simple requeue without outside effect, then simply set the retry times to your desired value. Important to note, each retry will block the same thread until it's either solved or runs out of retry chances, but everytime the resistor will emit the flush.rejected and flush.retrying event with the respective information to handle.
 
-### Why the name?
+### Whats with the name?
+
+---
 
 When I drafted the flow diagram for the features, I realised that this functionality is most similiar to what a resistor does in a circuit, if You implement it with an await keyword then your business logic's throughput will limit to what the slowest component allows, and this is utmost important when You don't want to melt down any API or database.
 
 ### Changelog
 
 ---
+
+##### 1.1.4
+
+- Fixed the retry thread blocking
+- A lot more test and minor optimalizations
+- Extended analytics with type faces
 
 ##### 1.1.2
 
