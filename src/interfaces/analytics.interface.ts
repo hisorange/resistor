@@ -11,13 +11,16 @@ export interface IAnalytics {
     active: number;
     opened: number;
     closed: number;
+    maximum: number;
   };
 
   queue: {
     waiting: number;
+    maximum: number;
   };
 
   record: {
     received: number;
+    buffered: number;
   };
 }

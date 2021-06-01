@@ -70,12 +70,15 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       active: 0,
       opened: 0,
       closed: 0,
+      maximum: 0,
     },
     queue: {
       waiting: 0,
+      maximum: 0,
     },
     record: {
       received: 0,
+      buffered: 0,
     },
   };
 
@@ -156,6 +159,16 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       });
     }
 
+    // Wait until the jobs are finished
+    while (this.waitQueue.length) {
+      await Promise.all(this.virtualThreads);
+    }
+
+    if (this.virtualThreads.length) {
+      await Promise.all(this.virtualThreads);
+    }
+
+    // Remove the last auto timer.
     if (this.autoFlushTimer) {
       clearTimeout(this.autoFlushTimer);
     }
@@ -189,7 +202,11 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       // We cut the maximum record and leave an empty array behind,
       // this is needed in case an async .push has been called while an other call started the flush.
       const records = this.buffer.splice(0, this.config.buffer.size);
+      this._analytics.record.buffered -= records.length;
+
+      // Retry counter.
       let retries = 0;
+
       const job = () =>
         this.handler(records).catch(async rejection => {
           this.emitter.emit(EVENTS.FLUSH_REJECTED, {
@@ -232,6 +249,10 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     // Limit the maximum "virtual threads" to the configured threshold.
     if (this.virtualThreads.length >= this.config.threads) {
       this._analytics.queue.waiting++;
+      this._analytics.queue.maximum = Math.max(
+        this._analytics.queue.maximum,
+        this._analytics.queue.waiting,
+      );
 
       // Wait until a thread finishes and allows the execution of this flush.
       await new Promise(waitPass => this.waitQueue.push(waitPass));
@@ -247,6 +268,12 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
 
     // Push the execution to a free thread.
     const threadId = this.virtualThreads.push(job()) - 1;
+
+    // Track maximum thread count.
+    this._analytics.thread.maximum = Math.max(
+      this._analytics.thread.active,
+      this._analytics.thread.maximum,
+    );
 
     // Hook to handle thread removal.
     const handler = this.virtualThreads[threadId].then(() => {
@@ -300,6 +327,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    */
   async push(record: I): Promise<void> {
     this._analytics.record.received++;
+    this._analytics.record.buffered++;
     this.buffer.push(record);
 
     if (this.buffer.length >= this.config.buffer.size) {
