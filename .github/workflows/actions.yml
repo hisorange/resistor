@@ -28,7 +28,7 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         uses: Ilshidur/action-slack@1.6.2
         with:
-          args: 'Resistor build has been tested'
+          args: 'Resistor build has been tested, now queues for build if needed'
 
       - name: Publish if version has been updated
         if: success()
@@ -43,11 +43,3 @@ jobs:
           publish_args: '--non-interactive'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-      - name: GitHub Publish on Slack
-        if: success()
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        uses: Ilshidur/action-slack@1.6.2
-        with:
-          args: 'Resistor has been published'

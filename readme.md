@@ -62,3 +62,19 @@ To provide hooks the package comes with an **EventEmitter** implementation, and 
 ### Why the name?
 
 When I drafted the flow diagram for the features, I realised that this functionality is most similiar to what a resistor does in a circuit, if You implement it with an await keyword then your business logic's throughput will limit to what the slowest component allows, and this is utmost important when You don't want to melt down any API or database.
+
+### Changelog
+
+---
+
+##### 1.1.0
+
+- Retry manager feature
+- Push only awaits queueing not the execution
+- Minimal implementation for the event emitter
+- First tests commited
+- Auto publishing system
+
+##### 1.0.0
+
+- Initiale release
