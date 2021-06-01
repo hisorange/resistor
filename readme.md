@@ -67,7 +67,7 @@ When I drafted the flow diagram for the features, I realised that this functiona
 
 ---
 
-##### 1.1.1
+##### 1.1.2
 
 - Retry manager feature
 - Push only awaits queueing not the execution
