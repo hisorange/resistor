@@ -33,13 +33,13 @@ export interface IResistorConfig {
     level: 'global' | 'thread';
 
     /**
-     * Configured limiting strategy handler.
+     * Configured limiting strategy worker.
      */
     strategy: IStrategy;
   };
 
   /**
-   * Retries the handler if the handler throws an unhandled promise rejection.
+   * Retries the worker if the worker throws an unhandled promise rejection.
    */
   retrier:
     | {

@@ -1,5 +1,5 @@
 export interface IAnalytics {
-  flush: {
+  worker: {
     invoked: number;
     scheduled: number;
     executed: number;

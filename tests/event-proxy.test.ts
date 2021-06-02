@@ -1,14 +1,13 @@
-import { EVENTS, IHandler, Resistor } from '../src';
+import { EVENTS, IWorker, Resistor } from '../src';
 
 /**
- * Tests for the event emitter feature.
+ * Tests for the event proxy solution.
  */
-
 jest.setTimeout(100);
 jest.mock('events');
 
-const createTestInstance = (handler?: IHandler<any>) => {
-  return new Resistor(handler ?? (async () => {}), {
+const createTestInstance = (worker?: IWorker<any>) => {
+  return new Resistor(worker ?? (async () => {}), {
     threads: 1,
     buffer: {
       size: 1,

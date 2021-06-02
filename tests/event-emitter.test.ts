@@ -1,14 +1,13 @@
-import { EVENTS, IHandler, Resistor } from '../src';
+import { EVENTS, IWorker, Resistor } from '../src';
 
 /**
  * Tests for the event emitter feature.
  */
-
 jest.setTimeout(100);
 jest.mock('events');
 
-const createTestInstance = (handler?: IHandler<any>) => {
-  return new Resistor(handler ?? (async () => {}), {
+const createTestInstance = (worker?: IWorker<any>) => {
+  return new Resistor(worker ?? (async () => {}), {
     threads: 1,
     buffer: {
       size: 1,
@@ -98,7 +97,7 @@ describe('Event Emitter', () => {
   });
 
   test.concurrent.each([1, 2, 3, 10])(
-    `should emit [${EVENTS.FLUSH_REJECTED}] event with thread count [%i]`,
+    `should emit [${EVENTS.WORKER_REJECTED}] event with thread count [%i]`,
     async (threadCount: number) => {
       const rejection = new Error('Jest');
       const instance = new Resistor(() => Promise.reject(rejection), {
@@ -111,10 +110,10 @@ describe('Event Emitter', () => {
       const emitter = instance['emitter'];
 
       await instance.push(1);
-      await instance.flush({ waitForHandler: true });
+      await instance.flush({ waitForWorker: true });
       await instance.deregister();
 
-      expect(emitter.emit).toHaveBeenCalledWith(EVENTS.FLUSH_REJECTED, {
+      expect(emitter.emit).toHaveBeenCalledWith(EVENTS.WORKER_REJECTED, {
         rejection,
         records: [1],
         errors: 1,
@@ -123,7 +122,7 @@ describe('Event Emitter', () => {
   );
 
   test.concurrent.each([1, 2, 3, 10])(
-    `should emit [${EVENTS.FLUSH_RETRYING}] event with thread count [%i]`,
+    `should emit [${EVENTS.WORKER_RETRYING}] event with thread count [%i]`,
     async (threadCount: number) => {
       const rejection = new Error('Jest');
       const createReturnValue = (retries: number) => ({
@@ -146,28 +145,61 @@ describe('Event Emitter', () => {
 
       // Need to wait on low thread count because the scheduler can be executed on the next tick.
       await instance.flush({
-        waitForHandler: true,
+        waitForWorker: true,
       });
       await instance.flush({
-        waitForHandler: true,
+        waitForWorker: true,
       });
 
       expect(emitter.emit).toHaveBeenCalledWith(
-        EVENTS.FLUSH_RETRYING,
+        EVENTS.WORKER_RETRYING,
         createReturnValue(1),
       );
       expect(emitter.emit).toHaveBeenCalledWith(
-        EVENTS.FLUSH_RETRYING,
+        EVENTS.WORKER_RETRYING,
         createReturnValue(2),
       );
       expect(emitter.emit).toHaveBeenCalledWith(
-        EVENTS.FLUSH_RETRYING,
+        EVENTS.WORKER_RETRYING,
         createReturnValue(3),
       );
       expect(emitter.emit).toHaveBeenCalledWith(
-        EVENTS.FLUSH_RETRYING,
+        EVENTS.WORKER_RETRYING,
         createReturnValue(4),
       );
+    },
+  );
+
+  test.concurrent.each([1, 2, 3, 8, 10])(
+    `should emit [${EVENTS.EMPTY}] event with thread count [%i]`,
+    async (threads: number) => {
+      const sent = threads * 7;
+      let handled = 0;
+      const instance = new Resistor(
+        async (records: number[]) => {
+          handled += records.length;
+        },
+        {
+          threads,
+          buffer: {
+            size: 2,
+          },
+          autoFlush: false,
+        },
+      );
+      const emitter = instance['emitter'];
+
+      for (let i = 0; i < sent; i++) {
+        instance.push(i);
+      }
+
+      await instance.deregister();
+
+      expect(instance.analytics.record.buffered).toBe(0);
+      expect(instance.analytics.record.received).toBe(sent);
+      expect(instance.analytics.queue.waiting).toBe(0);
+      expect(instance.analytics.thread.active).toBe(0);
+      expect(emitter.emit).toHaveBeenCalledWith(EVENTS.EMPTY);
     },
   );
 });

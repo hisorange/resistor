@@ -1,10 +1,15 @@
 import { EVENTS } from '../src/events';
 import { Resistor } from '../src/resistor';
 
+/**
+ * Test virtual threading feature
+ */
+jest.setTimeout(100);
+
 describe('Single Threaded Flush Handling', () => {
   test('Flush buffer when maximum size is reached', async () => {
-    const handler = jest.fn();
-    const instance = new Resistor<number>(async () => handler(), {
+    const worker = jest.fn();
+    const instance = new Resistor<number>(async () => worker(), {
       threads: 1,
       buffer: {
         size: 2,
@@ -16,7 +21,7 @@ describe('Single Threaded Flush Handling', () => {
       await instance.push(n);
     }
 
-    expect(handler).toHaveBeenCalledTimes(3);
+    expect(worker).toHaveBeenCalledTimes(3);
     expect(instance.analytics.thread.opened).toBe(3);
     expect(instance.analytics.thread.active).toBe(0);
     expect(instance.analytics.thread.maximum).toBe(1);

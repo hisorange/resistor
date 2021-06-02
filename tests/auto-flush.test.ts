@@ -1,15 +1,20 @@
 import { Resistor } from '../src/resistor';
 
+/**
+ * Test the auto flush feature
+ */
+jest.setTimeout(100);
+
 describe('Auto Flush', () => {
   test('Flush on timer without reaching the max size', done => {
-    const handler = async (records: number[]) => {
+    const worker = async (records: number[]) => {
       expect(records).toEqual(expect.arrayContaining([1, 2, 3]));
 
       instance.deregister();
       done();
     };
 
-    const instance = new Resistor<number>(handler, {
+    const instance = new Resistor<number>(worker, {
       buffer: {
         size: 4,
       },
@@ -24,7 +29,7 @@ describe('Auto Flush', () => {
   });
 
   test('Flush on the leftover', done => {
-    const handler = async (records: number[]) => {
+    const worker = async (records: number[]) => {
       if (records.length === 2) {
         expect(records).toEqual(expect.arrayContaining([1, 2]));
       } else {
@@ -34,7 +39,7 @@ describe('Auto Flush', () => {
       }
     };
 
-    const instance = new Resistor<number>(handler, {
+    const instance = new Resistor<number>(worker, {
       buffer: {
         size: 2,
       },

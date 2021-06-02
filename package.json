@@ -1,7 +1,15 @@
 {
   "name": "@hisorange/resistor",
-  "version": "1.1.4",
-  "description": "Virtual threaded resource processing handler.",
+  "version": "1.1.5",
+  "description": "Versatily resource load throttler with extensible strategies, configuration and virtual thread management.",
+  "keywords": [
+    "virtual-thread",
+    "throttle",
+    "resource",
+    "worker",
+    "parallel",
+    "rate-limiter"
+  ],
   "main": "build/index.js",
   "repository": "https://github.com/hisorange/resistor",
   "author": "Zsolt Varga <hello@hisorange.me>",

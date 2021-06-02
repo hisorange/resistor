@@ -3,11 +3,13 @@ export enum EVENTS {
   FLUSH_SCHEDULED = 'flush.scheduled',
   FLUSH_EXECUTED = 'flush.executed',
 
-  FLUSH_REJECTED = 'flush.rejected',
-  FLUSH_RETRYING = 'flush.retrying',
+  WORKER_REJECTED = 'worker.rejected',
+  WORKER_RETRYING = 'worker.retrying',
 
   THREAD_OPENED = 'thread.opened',
   THREAD_CLOSED = 'thread.closed',
 
   QUEUE_EMPTY = 'queue.empty',
+
+  EMPTY = 'empty',
 }

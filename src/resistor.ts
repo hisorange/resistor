@@ -6,13 +6,13 @@ import { IResistorConfig } from './interfaces/config.interface';
 import { DeepPartial } from './interfaces/deep-partial.type';
 import { EventListener } from './interfaces/event-listener.type';
 import { IFlushConfig } from './interfaces/flush-config.interface';
-import { IHandler } from './interfaces/handler.interface';
 import { WaitPass } from './interfaces/wait-pass.interface';
+import { IWorker } from './interfaces/worker.interface';
 import { UnboundStrategy } from './strategies/unbound.strategy';
 
 export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
   /**
-   * Temporary buffer to store the records until the handler flushes them.
+   * Temporary buffer to store the records until the worker flushes them.
    */
   protected buffer: I[] = [];
 
@@ -23,12 +23,12 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
   protected flushTimer: NodeJS.Timer | undefined;
 
   /**
-   * Stores the active flush handlers, this is how the script tracks the active "threads".
+   * Stores the active flush workers, this is how the script tracks the active "threads".
    */
   protected vThreads: Promise<void>[] = [];
 
   /**
-   * When the maximum thread reached, the script will enqueue the flush handlers in a FIFO logic,
+   * When the maximum thread reached, the script will enqueue the flush workers in a FIFO logic,
    * after a thread finished, it will shift the first waiting execution and allows its execution.
    */
   protected waitQueue: WaitPass[] = [];
@@ -59,7 +59,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    * Usage analytics, designed to be used with healthchecks.
    */
   protected _analytics: IAnalytics = {
-    flush: {
+    worker: {
       invoked: 0,
       scheduled: 0,
       executed: 0,
@@ -91,7 +91,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    * Initialize a configured resistor.
    */
   constructor(
-    protected handler: IHandler<I>,
+    protected worker: IWorker<I>,
     config?: DeepPartial<IResistorConfig>,
   ) {
     // Merge the config overides to the base config.
@@ -156,7 +156,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     // Flush the last buffer.
     if (this.buffer.length > 0) {
       await this.flush({
-        waitForHandler: true,
+        waitForWorker: true,
       });
     }
 
@@ -182,13 +182,13 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
   /**
    * Initiate a flush, this will schedule the current buffer to a virtual thread.
    *
-   * Important! By default the flush will not wait for the handler to execute so the caller
+   * Important! By default the flush will not wait for the worker to execute so the caller
    * can push the records until the active threads are populated without waiting.
    *
    * But when the deregister called the script will wait for the last flush to be handled.
    */
-  async flush(config: IFlushConfig = { waitForHandler: false }) {
-    this.emitter.emit(EVENTS.FLUSH_INVOKED, ++this._analytics.flush.invoked);
+  async flush(config: IFlushConfig = { waitForWorker: false }) {
+    this.emitter.emit(EVENTS.FLUSH_INVOKED, ++this._analytics.worker.invoked);
 
     // Release the auto flush until the buffer is freed.
     if (this.flushTimer) {
@@ -198,7 +198,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     if (this.buffer.length > 0) {
       this.emitter.emit(
         EVENTS.FLUSH_SCHEDULED,
-        ++this._analytics.flush.scheduled,
+        ++this._analytics.worker.scheduled,
       );
 
       // We cut the maximum record and leave an empty array behind,
@@ -210,18 +210,18 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       let retries = 0;
 
       const job = () =>
-        this.handler(records).catch(async rejection => {
-          this.emitter.emit(EVENTS.FLUSH_REJECTED, {
+        this.worker(records).catch(async rejection => {
+          this.emitter.emit(EVENTS.WORKER_REJECTED, {
             rejection,
             records,
-            errors: ++this._analytics.flush.errors,
+            errors: ++this._analytics.worker.errors,
           });
 
           // Retrying is enabled
           if (this.config.retrier) {
             // We are below the maximum tries.
             if (++retries <= this.config.retrier.times) {
-              this.emitter.emit(EVENTS.FLUSH_RETRYING, {
+              this.emitter.emit(EVENTS.WORKER_RETRYING, {
                 rejection,
                 records,
                 retries,
@@ -232,8 +232,8 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
           }
         });
 
-      // Schedule the handler for execution, the strategy will handle the timings.
-      await this.schedule(job, config.waitForHandler);
+      // Schedule the worker for execution, the strategy will handle the timings.
+      await this.schedule(job, config.waitForWorker);
     }
 
     // Always push the auto flush even if the next flush will do the same.
@@ -245,8 +245,8 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    * and the scheduler is responsible to manage the queue and the threads.
    */
   protected async schedule(
-    job: () => Promise<void>,
-    waitForHandler: boolean,
+    work: () => Promise<void>,
+    waitForWorker: boolean,
   ): Promise<void> {
     // Limit the maximum "virtual threads" to the configured threshold.
     if (this.vThreads.length >= this.config.threads) {
@@ -257,8 +257,6 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
 
       // Wait until a thread finishes and allows the execution of this flush.
       await new Promise(waitPass => this.waitQueue.push(waitPass));
-
-      this._analytics.queue.waiting--;
     }
 
     // Track maximum thread count.
@@ -272,17 +270,17 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     const startedAt = Date.now();
 
     // Push the execution to a free thread.
-    const threadId = this.vThreads.push(job()) - 1;
+    const threadId = this.vThreads.push(work()) - 1;
 
     // Hook to handle thread removal.
-    const handler = this.vThreads[threadId].then(() => {
+    const worker = this.vThreads[threadId].then(() => {
       const finishedAt = Date.now();
 
       // Track the execution time.
-      this._analytics.flush.processTime = finishedAt - startedAt;
+      this._analytics.worker.processTime = finishedAt - startedAt;
       this.emitter.emit(
         EVENTS.FLUSH_EXECUTED,
-        ++this._analytics.flush.executed,
+        ++this._analytics.worker.executed,
       );
 
       // Remove the process after finish.
@@ -302,6 +300,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       if (this.waitQueue.length > 0) {
         // Get the first waiting pass from the queue.
         const waitPass = this.waitQueue.shift();
+        this._analytics.queue.waiting--;
 
         if (typeof waitPass === 'function') {
           this.config.limiter.strategy.handleWaitPass(vThreadId, waitPass);
@@ -312,11 +311,20 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
           this.emitter.emit(EVENTS.QUEUE_EMPTY);
         }
       }
+
+      // Resistor is totaly empty.
+      if (
+        !this.buffer.length &&
+        !this._analytics.thread.active &&
+        !this._analytics.queue.waiting
+      ) {
+        this.emitter.emit(EVENTS.EMPTY);
+      }
     });
 
-    // The flush wants to wait for the handler as well.
-    if (waitForHandler) {
-      await handler;
+    // The flush wants to wait for the worker as well.
+    if (waitForWorker) {
+      await worker;
     }
   }
 

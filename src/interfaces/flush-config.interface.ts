@@ -1,3 +1,3 @@
 export interface IFlushConfig {
-  waitForHandler: boolean;
+  waitForWorker: boolean;
 }
