@@ -249,7 +249,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     waitForWorker: boolean,
   ): Promise<void> {
     // Limit the maximum "virtual threads" to the configured threshold.
-    if (this.vThreads.length >= this.config.threads) {
+    if (this._analytics.thread.active >= this.config.threads) {
       this._analytics.queue.maximum = Math.max(
         this._analytics.queue.maximum,
         ++this._analytics.queue.waiting,

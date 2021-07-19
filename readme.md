@@ -208,6 +208,10 @@ When I drafted the flow diagram for the features, I realised that this functiona
 
 ---
 
+##### 1.1.6
+
+- Fix an interesting V8 related bug where the array's length are cached within a tick
+
 ##### 1.1.5
 
 - Usage examples
