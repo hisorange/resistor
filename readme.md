@@ -2,10 +2,10 @@
 
 ## Resistor - Versatily Green Threaded Resource Loading Throttler
 
-[![Version](https://badge.fury.io/gh/hisorange%2Fcircuit.svg)](https://badge.fury.io/gh/hisorange%2Fcircuit)
-[![Build](https://github.com/hisorange/circuit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hisorange/circuit/actions/workflows/ci.yml)
-[![Coverage Status](https://coveralls.io/repos/github/hisorange/circuit/badge.svg)](https://coveralls.io/github/hisorange/circuit)
-[![GitHub license](https://img.shields.io/github/license/hisorange/circuit)](https://github.com/hisorange/circuit/blob/main/LICENSE)
+[![Version](https://badge.fury.io/gh/hisorange%2Fresistor.svg)](https://badge.fury.io/gh/hisorange%2Fresistor)
+[![Build](https://github.com/hisorange/resistor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hisorange/resistor/actions/workflows/ci.yml)
+[![Coverage Status](https://coveralls.io/repos/github/hisorange/resistor/badge.svg)](https://coveralls.io/github/hisorange/resistor)
+[![GitHub license](https://img.shields.io/github/license/hisorange/resistor)](https://github.com/hisorange/resistor/blob/main/LICENSE)
 
 Versatily resource load throttler with extensible strategies, configuration and virtual thread management. This packages provides a solution to limit and contol the your worker's invocation, and by this feature you can easily implement any resource usage limiter into your flow.
 
