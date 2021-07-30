@@ -1,9 +1,13 @@
+__tests__/
 .github
-build/*.spec.js
-build/**/*.spec.js
+.vscode
+coverage/
 src/
-tests/
+.eslintigore
+.eslintrc.js
 .prettierrc
 jest.config.js
+tsconfig.dev.json
 tsconfig.json
+tsconfig.prod.json
 yarn.lock

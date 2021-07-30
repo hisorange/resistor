@@ -11,18 +11,38 @@
     "parallel",
     "rate-limiter"
   ],
-  "main": "build/index.js",
-  "repository": "https://github.com/hisorange/resistor",
-  "author": "Zsolt Varga <hello@hisorange.me>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hisorange/resistor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hisorange/resistor/issues"
+  },
+  "author": {
+    "name": "Varga Zsolt",
+    "email": "hello@hisorange.me",
+    "url": "https://hisorange.me"
+  },
   "license": "MIT",
   "scripts": {
-    "build": "tsc --build ./tsconfig.json",
-    "test": "jest"
+    "test": "jest --collectCoverage=0",
+    "test:ci": "jest",
+    "pretest:ci": "eslint .",
+    "lint": "eslint --fix .",
+    "build": "rimraf build && tsc -p tsconfig.dev.json",
+    "build:watch": "rimraf build && tsc -p tsconfig.dev.json --watch",
+    "build:prod": "rimraf build && tsc -p tsconfig.prod.json"
   },
   "devDependencies": {
     "@types/jest": "^26.0.23",
     "@types/node": "^15.0.2",
+    "@typescript-eslint/eslint-plugin": "^4.28.5",
+    "@typescript-eslint/parser": "^4.28.5",
+    "eslint": "^7.31.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-prettier": "^3.4.0",
     "jest": "^27.0.3",
+    "prettier": "^2.3.2",
     "ts-jest": "^27.0.2",
     "typescript": "^4.2.4"
   },

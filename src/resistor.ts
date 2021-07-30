@@ -2,6 +2,7 @@ import EventEmitter from 'events';
 import merge from 'ts-deepmerge';
 import { EVENTS } from './events';
 import {
+  EventListener,
   IAnalytics,
   IBufferedConfig,
   IFlushConfig,
@@ -17,7 +18,7 @@ export class Resistor<I> {
   /**
    * Provide an atomic job sequence id, will be used to identify the results.
    */
-  protected jobIdSeq: number = 0;
+  protected jobIdSeq = 0;
 
   /**
    * Temporary buffer to store the records until the worker flushes them.
@@ -149,7 +150,7 @@ export class Resistor<I> {
    *
    * This is always being pushed out when the buffer reaches the maximum size.
    */
-  protected register() {
+  protected register(): void {
     if (this.config.buffer && this.config.autoFlush) {
       this.flushTimer = setTimeout(
         () => this.flush(),
@@ -165,7 +166,7 @@ export class Resistor<I> {
    * @example process.on('SIGTERM', resistor.deregister.bind(resistor));
    * @example process.on('SIGKILL', resistor.deregister.bind(resistor));
    */
-  async deregister() {
+  async deregister(): Promise<void> {
     // Inactivate the timer registration.
     if (this.config.autoFlush) {
       this.config.autoFlush = false;
@@ -205,7 +206,7 @@ export class Resistor<I> {
    *
    * But when the deregister called the script will wait for the last flush to be handled.
    */
-  async flush(config: IFlushConfig = { waitForWorker: false }) {
+  async flush(config: IFlushConfig = { waitForWorker: false }): Promise<void> {
     this.emitter.emit(EVENTS.FLUSH_INVOKED, ++this._analytics.worker.invoked);
 
     // Release the auto flush until the buffer is freed.

@@ -1,1 +1,1 @@
-export type EventListener = (...args: any[]) => void;
+export type EventListener = (...args: unknown[]) => void;

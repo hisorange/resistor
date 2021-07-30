@@ -18,7 +18,7 @@ export class IntervalStrategy implements IStrategy {
     this.config = { ...this.config, ...config };
   }
 
-  async handleWaitPass(threadId: number, waitPass: WaitPass) {
+  async handleWaitPass(threadId: number, waitPass: WaitPass): Promise<void> {
     // Retrive the last finish epoch, so we can calculate the wait time until the next invokation.
     const lastFinishedAt = this.monitor.get(threadId) ?? 0;
 
@@ -36,7 +36,7 @@ export class IntervalStrategy implements IStrategy {
     waitPass();
   }
 
-  threadFinished(threadId: number, finishedAt: number) {
+  threadFinished(threadId: number, finishedAt: number): void {
     this.monitor.set(threadId, finishedAt);
   }
 }

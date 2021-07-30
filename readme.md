@@ -1,20 +1,25 @@
 ![Resistor](https://user-images.githubusercontent.com/3441017/119745067-ab632600-be8d-11eb-93e1-24d34ffe2a92.png)
 
----
+## Resistor - Versatily Green Threaded Resource Loading Throttler
 
-### Quick Start
+[![Version](https://badge.fury.io/gh/hisorange%2Fcircuit.svg)](https://badge.fury.io/gh/hisorange%2Fcircuit)
+[![Build](https://github.com/hisorange/circuit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hisorange/circuit/actions/workflows/ci.yml)
+[![Coverage Status](https://coveralls.io/repos/github/hisorange/circuit/badge.svg)](https://coveralls.io/github/hisorange/circuit)
+[![GitHub license](https://img.shields.io/github/license/hisorange/circuit)](https://github.com/hisorange/circuit/blob/main/LICENSE)
+
+Versatily resource load throttler with extensible strategies, configuration and virtual thread management. This packages provides a solution to limit and contol the your worker's invocation, and by this feature you can easily implement any resource usage limiter into your flow.
+
+I wrote this package because I know how boring is to rewrite the bulk save, and API limiters for every high throughput flow, and this is why the Resistor accepts a generic async worker so You can implement any kind of work which requires control over the resource loading.
+
+### Getting Started
+
+---
 
 ```sh
 npm i @hisorange/resistor
 # or
 yarn add @hisorange/resistor
 ```
-
----
-
-Versatily resource load throttler with extensible strategies, configuration and virtual thread management. This packages provides a solution to limit and contol the your worker's invocation, and by this feature you can easily implement any resource usage limiter into your flow.
-
-I wrote this package because I know how boring is to rewrite the bulk save, and API limiters for every high throughput flow, and this is why the Resistor accepts a generic async worker so You can implement any kind of work which requires control over the resource loading.
 
 ### Strategy - Interval
 
@@ -26,12 +31,10 @@ In this example we start a new HTTP call every 5 second, in 2 parallel virtual t
 ```ts
 import { Resistor, IntervalStrategy } from '@hisorange/resistor';
 
-const worker = async (urls: string[]) => fetch(urls[0]);
+const worker = async (url: string) => fetch(url);
 const buffer = new Resistor<string>(worker, {
   threads: 2,
-  buffer: {
-    size: 1,
-  },
+  buffer: false,
   limiter: {
     level: 'thread', // Applied to each thread individually
     strategy: new IntervalStrategy({
@@ -43,7 +46,7 @@ const buffer = new Resistor<string>(worker, {
 // Not blocking just starts the work.
 await buffer.push('https://hisorange.me');
 await buffer.push('https://google.com');
-// Will wait 5 second until the promise resolves.
+// Will wait 5 second until the worker can start the work.
 await buffer.push('https://github.com');
 ```
 
@@ -204,33 +207,15 @@ const usage = resistor.analytics;
 
 When I drafted the flow diagram for the features, I realised that this functionality is most similiar to what a resistor does in a circuit, if You implement it with an await keyword then your business logic's throughput will limit to what the slowest component allows, and this is utmost important when You don't want to melt down any API or database.
 
+### Links
+
+---
+
+- [GitHub](https://github.com/hisorange/resistor)
+- [NPM](https://www.npmjs.com/package/@hisorange/resistor)
+
 ### Changelog
 
 ---
 
-##### 1.1.6
-
-- Fix an interesting V8 related bug where the array's length are cached within a tick
-
-##### 1.1.5
-
-- Usage examples
-- Change in event keys to match the worker naming
-
-##### 1.1.4
-
-- Fixed the retry thread blocking
-- A lot more test and minor optimalizations
-- Extended analytics with type faces
-
-##### 1.1.2
-
-- Retry manager feature
-- Push only awaits queueing not the execution
-- Minimal implementation for the event emitter
-- First tests commited
-- Auto publishing system
-
-##### 1.0.0
-
-- Initiale release
+Track changes in the [Changelog](./changelog.md)
