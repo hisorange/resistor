@@ -1,16 +1,24 @@
 import EventEmitter from 'events';
 import merge from 'ts-deepmerge';
 import { EVENTS } from './events';
-import { IAnalytics } from './interfaces/analytics.interface';
-import { IResistorConfig } from './interfaces/config.interface';
-import { DeepPartial } from './interfaces/deep-partial.type';
-import { EventListener } from './interfaces/event-listener.type';
-import { IFlushConfig } from './interfaces/flush-config.interface';
-import { WaitPass } from './interfaces/wait-pass.interface';
-import { IWorker } from './interfaces/worker.interface';
-import { UnboundStrategy } from './strategies/unbound.strategy';
+import {
+  IAnalytics,
+  IBufferedConfig,
+  IFlushConfig,
+  IUnbufferedConfig,
+  IWorker,
+  WaitPass,
+} from './interfaces';
+import { UnboundStrategy } from './strategies';
 
-export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
+export class Resistor<I> {
+  protected worker: IWorker<I>;
+
+  /**
+   * Provide an atomic job sequence id, will be used to identify the results.
+   */
+  protected jobIdSeq: number = 0;
+
   /**
    * Temporary buffer to store the records until the worker flushes them.
    */
@@ -34,9 +42,9 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
   protected waitQueue: WaitPass[] = [];
 
   /**
-   * Stores the manageging configurations.
+   * Stores the instance configurations.
    */
-  protected config: IResistorConfig = {
+  protected config: IUnbufferedConfig | IBufferedConfig = {
     threads: 10,
 
     buffer: {
@@ -85,18 +93,26 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
   /**
    * NodeJS event emitter.
    */
-  protected emitter: EventEmitter;
+  readonly emitter: EventEmitter;
 
   /**
    * Initialize a configured resistor.
    */
-  constructor(
-    protected worker: IWorker<I>,
-    config?: DeepPartial<IResistorConfig>,
-  ) {
+  constructor(worker: IWorker<I>, config?: Partial<IUnbufferedConfig>);
+  constructor(worker: IWorker<Array<I>>, config?: Partial<IBufferedConfig>);
+  constructor(...args: unknown[]) {
+    if (args.length === 0) {
+      throw new Error('Please provide at least a worker');
+    }
+
+    this.worker = args[0] as IWorker<I>;
+
     // Merge the config overides to the base config.
-    if (config) {
-      this.config = merge(this.config, config);
+    if (args.length === 2) {
+      this.config = merge(
+        this.config,
+        args[1] as IBufferedConfig | IUnbufferedConfig,
+      );
     }
 
     // Start the auto flush timer if it's configured.
@@ -134,7 +150,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    * This is always being pushed out when the buffer reaches the maximum size.
    */
   protected register() {
-    if (this.config.autoFlush) {
+    if (this.config.buffer && this.config.autoFlush) {
       this.flushTimer = setTimeout(
         () => this.flush(),
         this.config.autoFlush.delay,
@@ -151,10 +167,12 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    */
   async deregister() {
     // Inactivate the timer registration.
-    this.config.autoFlush = false;
+    if (this.config.autoFlush) {
+      this.config.autoFlush = false;
+    }
 
-    // Flush the last buffer.
-    if (this.buffer.length > 0) {
+    // Flush the last buffer, if the instance has any buffering.
+    if (this.config.buffer && this.buffer?.length > 0) {
       await this.flush({
         waitForWorker: true,
       });
@@ -195,7 +213,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       clearTimeout(this.flushTimer);
     }
 
-    if (this.buffer.length > 0) {
+    if (this.config.buffer && this.buffer.length > 0) {
       this.emitter.emit(
         EVENTS.FLUSH_SCHEDULED,
         ++this._analytics.worker.scheduled,
@@ -206,38 +224,44 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       const records = this.buffer.splice(0, this.config.buffer.size);
       this._analytics.record.buffered -= records.length;
 
-      // Retry counter.
-      let retries = 0;
-
-      const job = () =>
-        this.worker(records).catch(async rejection => {
-          this.emitter.emit(EVENTS.WORKER_REJECTED, {
-            rejection,
-            records,
-            errors: ++this._analytics.worker.errors,
-          });
-
-          // Retrying is enabled
-          if (this.config.retrier) {
-            // We are below the maximum tries.
-            if (++retries <= this.config.retrier.times) {
-              this.emitter.emit(EVENTS.WORKER_RETRYING, {
-                rejection,
-                records,
-                retries,
-              });
-
-              await job();
-            }
-          }
-        });
-
       // Schedule the worker for execution, the strategy will handle the timings.
-      await this.schedule(job, config.waitForWorker);
+      await this.schedule(
+        this.createJobHandler(records as unknown as I),
+        config.waitForWorker,
+      );
     }
 
     // Always push the auto flush even if the next flush will do the same.
     this.register();
+  }
+
+  protected createJobHandler(records: I): () => Promise<void> {
+    let retries = 0;
+
+    const job = () =>
+      this.worker(records, ++this.jobIdSeq).catch(async rejection => {
+        this.emitter.emit(EVENTS.WORKER_REJECTED, {
+          rejection,
+          records,
+          errors: ++this._analytics.worker.errors,
+        });
+
+        // Retrying is enabled
+        if (this.config.retrier) {
+          // We are below the maximum tries.
+          if (++retries <= this.config.retrier.times) {
+            this.emitter.emit(EVENTS.WORKER_RETRYING, {
+              rejection,
+              records,
+              retries,
+            });
+
+            await job();
+          }
+        }
+      });
+
+    return job;
   }
 
   /**
@@ -314,6 +338,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
 
       // Resistor is totaly empty.
       if (
+        this.config.buffer &&
         !this.buffer.length &&
         !this._analytics.thread.active &&
         !this._analytics.queue.waiting
@@ -332,13 +357,30 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    * Push a record to the buffer, returns a promise which should be awaited so
    * the caller can be slowed down when the threads are overloaded.
    */
-  async push(record: I): Promise<void> {
+  async push(...records: I[]): Promise<void> {
     this._analytics.record.received++;
-    this._analytics.record.buffered++;
-    this.buffer.push(record);
 
-    if (this.buffer.length >= this.config.buffer.size) {
-      await this.flush();
+    if (this.config.buffer) {
+      this._analytics.record.buffered++;
+      this.buffer.push(...records);
+
+      // Flush will handle the scheduling and the packaging.
+      if (this.buffer.length >= this.config.buffer.size) {
+        await this.flush();
+      }
+    } else {
+      const jobs = [];
+
+      // We push every item to the threads or to the wait queue.
+      for (const record of records) {
+        jobs.push(this.schedule(this.createJobHandler(record), false));
+      }
+
+      // Since the caller must await the execution,
+      // we have to provide a way to ensure that each record
+      // was either schedueld or executed.
+      // If the records do not fill the threads, then this will resolve instantly.
+      await Promise.all(jobs);
     }
   }
 

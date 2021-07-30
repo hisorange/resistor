@@ -1,6 +1,6 @@
 import { IStrategy } from './strategy.interface';
 
-export interface IResistorConfig {
+interface SharedConfig {
   /**
    * Maximum amount of virtual threads.
    */
@@ -17,13 +17,6 @@ export interface IResistorConfig {
         delay: number;
       }
     | false;
-
-  buffer: {
-    /**
-     * Buffer's maximum size when scheduled for flushing.
-     */
-    size: number;
-  };
 
   limiter: {
     /**
@@ -46,4 +39,15 @@ export interface IResistorConfig {
         times: number;
       }
     | false;
+}
+
+export interface IUnbufferedConfig extends SharedConfig {
+  buffer: false;
+  autoFlush: false;
+}
+
+export interface IBufferedConfig extends SharedConfig {
+  buffer: {
+    size: number;
+  };
 }

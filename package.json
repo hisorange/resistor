@@ -1,8 +1,9 @@
 {
   "name": "@hisorange/resistor",
-  "version": "1.1.6",
-  "description": "Versatily resource load throttler with extensible strategies, configuration and virtual thread management.",
+  "version": "1.2.0",
+  "description": "Versatily resource loading throttler with extensible strategies, configuration and virtual thread management.",
   "keywords": [
+    "greenthreads",
     "virtual-thread",
     "throttle",
     "resource",

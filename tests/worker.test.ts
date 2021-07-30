@@ -20,9 +20,9 @@ describe('Worker Error', () => {
 
     instance.push('e');
 
-    instance.on(EVENTS.WORKER_REJECTED, ({ rejection, errors }) => {
-      expect(errors).toBe(1);
-      expect(rejection.message).toBe('ByWorker');
+    instance.on(EVENTS.WORKER_REJECTED, (data: any) => {
+      expect(data.errors).toBe(1);
+      expect(data.rejection.message).toBe('ByWorker');
       instance.deregister();
       done();
     });
@@ -46,8 +46,8 @@ describe('Worker Retry', () => {
 
     instance.push('e');
 
-    instance.on(EVENTS.WORKER_RETRYING, ({ retries }) => {
-      if (retries === 2) {
+    instance.on(EVENTS.WORKER_RETRYING, (data: any) => {
+      if (data.retries === 2) {
         instance.deregister();
         done();
       }

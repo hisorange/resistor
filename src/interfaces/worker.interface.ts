@@ -1,1 +1,1 @@
-export type IWorker<I> = (records: I[]) => Promise<void>;
+export type IWorker<I> = (records: I, jobId: number) => Promise<void>;
