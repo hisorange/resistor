@@ -110,8 +110,8 @@ describe('Multi Threaded Flush Handling', () => {
       const sent = threads * record;
       let arrived = 0;
       const instance = new Resistor(
-        async (records: number[]) => {
-          arrived += records.length;
+        async (record: number) => {
+          arrived++;
         },
         {
           threads,

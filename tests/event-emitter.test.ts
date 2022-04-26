@@ -115,7 +115,7 @@ describe('Event Emitter', () => {
 
       expect(emitter.emit).toHaveBeenCalledWith(EVENTS.WORKER_REJECTED, {
         rejection,
-        records: [1],
+        records: 1,
         errors: 1,
       });
     },
@@ -128,7 +128,7 @@ describe('Event Emitter', () => {
       const createReturnValue = (retries: number) => ({
         rejection,
         retries,
-        records: [1],
+        records: 1,
       });
       const instance = new Resistor(() => Promise.reject(rejection), {
         threads: threadCount,

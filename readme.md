@@ -26,11 +26,11 @@ In this example we start a new HTTP call every 5 second, in 2 parallel virtual t
 ```ts
 import { Resistor, IntervalStrategy } from '@hisorange/resistor';
 
-const worker = async (urls: string[]) => fetch(urls[0]);
-const buffer = new Resistor<string>(worker, {
+const worker = async (urls: string[]) => urls.forEach(fetch));
+const buffer = new Resistor(worker, {
   threads: 2,
   buffer: {
-    size: 1,
+    size: 10,
   },
   limiter: {
     level: 'thread', // Applied to each thread individually
@@ -42,9 +42,23 @@ const buffer = new Resistor<string>(worker, {
 
 // Not blocking just starts the work.
 await buffer.push('https://hisorange.me');
-await buffer.push('https://google.com');
+await buffer.push('https://artgen.io');
 // Will wait 5 second until the promise resolves.
 await buffer.push('https://github.com');
+
+// New feature (2.x.x): set the buffer size to 1, and the worker will only receive
+// a single record and not an array of records.
+// This syntax makes it easier to wrap functions
+const resistor = new Resistor(fetch, {
+  thread: 16,
+  buffer: {
+    size: 1
+  }
+});
+
+// Will call the fetch directly on a maximum of 16 concurrent thread.
+resistor.push('https://enalin.co');
+resistor.push('https://prerender.io');
 ```
 
 ### Strategy - Rate Limiter
@@ -207,6 +221,11 @@ When I drafted the flow diagram for the features, I realised that this functiona
 ### Changelog
 
 ---
+
+##### 2.0.0
+
+- Fixed an edge case on shutdown where the buffer may keep 1 record in progress but says it's stopped
+- Added the new single record option behavior when the buffer size is 1
 
 ##### 1.1.6
 

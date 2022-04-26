@@ -7,7 +7,11 @@ import { DeepPartial } from './interfaces/deep-partial.type';
 import { EventListener } from './interfaces/event-listener.type';
 import { IFlushConfig } from './interfaces/flush-config.interface';
 import { WaitPass } from './interfaces/wait-pass.interface';
-import { IWorker } from './interfaces/worker.interface';
+import {
+  IBufferedWorker,
+  ISingleRecordWorker,
+  IWorker,
+} from './interfaces/worker.interface';
 import { UnboundStrategy } from './strategies/unbound.strategy';
 
 export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
@@ -88,15 +92,24 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
   protected emitter: EventEmitter;
 
   /**
+   * Store the reference to the worker function.
+   */
+  protected worker: IWorker<I>;
+
+  /**
    * Initialize a configured resistor.
    */
-  constructor(
-    protected worker: IWorker<I>,
-    config?: DeepPartial<IResistorConfig>,
-  ) {
+  constructor(worker: IWorker<I>, config?: DeepPartial<IResistorConfig>) {
     // Merge the config overides to the base config.
     if (config) {
       this.config = merge(this.config, config);
+    }
+
+    // Help the type system.
+    if (this.config.buffer.size === 1) {
+      this.worker = worker as ISingleRecordWorker<I>;
+    } else {
+      this.worker = worker as IBufferedWorker<I>;
     }
 
     // Start the auto flush timer if it's configured.
@@ -162,7 +175,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
 
     // Wait until the jobs are finished
     while (this.waitQueue.length) {
-      await Promise.all(this.vThreads);
+      await Promise.all(this.waitQueue);
     }
 
     // Queue maybe empty but the vThreads could be loaded.
@@ -201,16 +214,23 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
         ++this._analytics.worker.scheduled,
       );
 
+      let records: I | I[];
+
       // We cut the maximum record and leave an empty array behind,
       // this is needed in case an async .push has been called while an other call started the flush.
-      const records = this.buffer.splice(0, this.config.buffer.size);
-      this._analytics.record.buffered -= records.length;
+      if (this.config.buffer.size === 1) {
+        records = this.buffer.pop() as I;
+        this._analytics.record.buffered--;
+      } else {
+        records = this.buffer.splice(0, this.config.buffer.size) as I[];
+        this._analytics.record.buffered -= records.length;
+      }
 
       // Retry counter.
       let retries = 0;
 
-      const job = () =>
-        this.worker(records).catch(async rejection => {
+      const job = (threadId: number) =>
+        this.worker(records as I & I[], threadId).catch(async rejection => {
           this.emitter.emit(EVENTS.WORKER_REJECTED, {
             rejection,
             records,
@@ -227,7 +247,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
                 retries,
               });
 
-              await job();
+              await job(threadId);
             }
           }
         });
@@ -245,7 +265,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
    * and the scheduler is responsible to manage the queue and the threads.
    */
   protected async schedule(
-    work: () => Promise<void>,
+    job: (threadId: number) => Promise<void>,
     waitForWorker: boolean,
   ): Promise<void> {
     // Limit the maximum "virtual threads" to the configured threshold.
@@ -270,7 +290,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
     const startedAt = Date.now();
 
     // Push the execution to a free thread.
-    const threadId = this.vThreads.push(work()) - 1;
+    const threadId = this.vThreads.push(job(this.vThreads.length)) - 1;
 
     // Hook to handle thread removal.
     const worker = this.vThreads[threadId].then(() => {
