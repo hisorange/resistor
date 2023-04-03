@@ -115,6 +115,7 @@ const buffer = new Resistor<string>(worker, {
     strategy: new UnboundStrategy(),
   },
 });
+// Alternative quick syntax const threader = threadIt(worker, 5)
 
 // Not blocking just starts the work.
 await buffer.push('admin');

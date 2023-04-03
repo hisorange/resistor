@@ -5,3 +5,4 @@ export * from './interfaces/strategy.interface';
 export * from './interfaces/worker.interface';
 export * from './resistor';
 export * from './strategies';
+export * from './syntax';
