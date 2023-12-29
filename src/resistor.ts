@@ -297,7 +297,7 @@ export class Resistor<I> implements Pick<EventEmitter, 'on' | 'once' | 'off'> {
       const finishedAt = Date.now();
 
       // Track the execution time.
-      this._analytics.worker.processTime = finishedAt - startedAt;
+      this._analytics.worker.processTime += finishedAt - startedAt;
       this.emitter.emit(
         EVENTS.FLUSH_EXECUTED,
         ++this._analytics.worker.executed,
